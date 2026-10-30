@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Icon Library Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./assets/index-D8DKvKdd.css" />
+    <style>
+      html, body { background: #f5f5f5; }
+      /* Shrink the fixed 1440x1024 artboard to fit narrower screens */
+      .artboard { zoom: var(--fit, 1); }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      function fit() { document.documentElement.style.setProperty("--fit", Math.min(1, window.innerWidth / 1440)); }
+      fit(); window.addEventListener("resize", fit);
+    </script>
+    <script type="module" src="./assets/index-C82eZEvc.js"></script>
+  </body>
+</html>
