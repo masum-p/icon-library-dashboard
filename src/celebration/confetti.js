@@ -1,23 +1,24 @@
 export const LOOP_MS = 7000;
-const BURST_AT = 1000;
-const RAIN_END = 4000;
+const RAIN_START = 0;
+const RAIN_END = 3000;
+const CLEAR_AT = 5850;
 
 const COLORS = [
   '#E23B3B',
-  '#F5B301',
+  '#EF4444',
+  '#DC2626',
   '#22C55E',
-  '#3B82F6',
-  '#A855F7',
-  '#EC4899',
-  '#14B8A6',
-  '#F97316',
-  '#6366F1',
-  '#F43F5E',
-  '#84CC16',
-  '#06B6D4',
+  '#16A34A',
+  '#4ADE80',
   '#FACC15',
+  '#F5B301',
+  '#FDE047',
+  '#EC4899',
+  '#F472B6',
   '#FB7185',
-  '#CB3837',
+  '#14B8A6',
+  '#2DD4BF',
+  '#06B6D4',
 ];
 
 function mulberry32(seed) {
@@ -31,92 +32,65 @@ function mulberry32(seed) {
   };
 }
 
-function visual(rand, burst) {
-  const roll = rand();
-  const shape = roll < 0.58 ? 'rect' : roll < 0.82 ? 'strip' : 'circle';
-  const size = (burst ? 9 : 7) + rand() * (burst ? 11 : 8);
+function paper(rand, kind) {
+  const wide = rand() < 0.55;
+  const length = 5 + rand() * 8;
   return {
-    shape,
-    w: shape === 'strip' ? size * 0.42 : size * (shape === 'circle' ? 0.72 : 0.85),
-    h: shape === 'strip' ? size * 1.85 : shape === 'circle' ? size * 0.72 : size * (0.5 + rand() * 0.55),
-    rot: rand() * Math.PI * 2,
-    vr: (rand() - 0.5) * (burst ? 11 : 7),
+    nx: rand(),
+    ny: kind === 'sheet' ? -0.04 + rand() * 0.92 : -0.08 - rand() * 0.18,
+    vx: (rand() - 0.5) * 28,
+    vy: 70 + rand() * 150,
+    gravity: 70 + rand() * 90,
+    life: 2.15 + rand() * 1.35,
+    w: wide ? length : length * 0.42,
+    h: wide ? length * (0.28 + rand() * 0.22) : length,
+    rot: rand() * Math.PI,
+    vr: (rand() - 0.5) * 1.6,
     color: COLORS[(rand() * COLORS.length) | 0],
-    sway: 10 + rand() * 26,
-    swayFreq: 1.4 + rand() * 2.2,
+    sway: 8 + rand() * 18,
+    swayFreq: 0.7 + rand() * 1.3,
     swayPhase: rand() * Math.PI * 2,
-  };
-}
-
-function burstSpec(rand) {
-  const cone = rand() < 0.8;
-  const angle = cone ? -Math.PI * 0.5 + (rand() - 0.5) * Math.PI * 1.45 : rand() * Math.PI * 2;
-  const speed = cone ? 420 + rand() * 900 : 180 + rand() * 520;
-  return {
-    ox: (rand() - 0.5) * 18,
-    oy: (rand() - 0.5) * 12,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    gravity: 1180 + rand() * 360,
-    life: 1.7 + rand() * 1.15,
-    ...visual(rand, true),
-  };
-}
-
-function rainSpec(rand, u) {
-  const slow = rand() < 0.5 + u * 0.28;
-  return {
-    ox: (rand() - 0.5) * (170 + u * 150),
-    oy: -16 - rand() * 70,
-    vx: (rand() - 0.5) * 80,
-    vy: slow ? -8 + rand() * 36 : 12 + rand() * 100,
-    gravity: slow ? 62 + rand() * 48 : 150 + rand() * 70,
-    life: slow ? 3.1 + rand() * 1.5 : 2.15 + rand() * 0.9,
-    ...visual(rand, false),
   };
 }
 
 export function createShow() {
   const rand = mulberry32(0x886001);
-  const burst = Array.from({ length: 150 }, () => burstSpec(rand));
-  const rain = [];
+  const pieces = [];
+  for (let i = 0; i < 560; i += 1) pieces.push({ t: RAIN_START, ...paper(rand, 'sheet') });
   let acc = 0;
-  for (let t = BURST_AT; t < RAIN_END; t += 16) {
-    const u = (t - BURST_AT) / (RAIN_END - BURST_AT);
-    const rate = 96 * (1 - u) ** 1.55 + 10;
+  for (let t = RAIN_START; t < RAIN_END; t += 16) {
+    const u = (t - RAIN_START) / (RAIN_END - RAIN_START);
+    const rate = 320 + 980 * u ** 0.7;
     acc += rate * 0.016;
     while (acc >= 1) {
-      const spec = rainSpec(rand, u);
-      const maxLife = Math.max(0.8, (6750 - t) / 1000);
-      spec.life = Math.min(spec.life, maxLife);
-      rain.push({ t, ...spec });
+      const spec = paper(rand, 'rain');
+      spec.life = Math.min(spec.life, Math.max(0.7, (CLEAR_AT - 100 - t) / 1000));
+      pieces.push({ t, ...spec });
       acc -= 1;
     }
   }
-  return { burst, rain };
+  return pieces;
 }
 
 export function createState() {
   return {
     particles: [],
-    burstDone: false,
-    rainIndex: 0,
+    index: 0,
     lastElapsed: 0,
     show: createShow(),
   };
 }
 
-function emit(state, spec, origin, bornMs) {
+function emit(state, spec, viewport, bornMs) {
   state.particles.push({
-    x: origin.x + spec.ox,
-    y: origin.y + spec.oy,
+    x: spec.nx * viewport.width,
+    y: spec.ny * viewport.height,
     vx: spec.vx,
     vy: spec.vy,
     gravity: spec.gravity,
     life: spec.life,
     born: bornMs / 1000,
     age: 0,
-    shape: spec.shape,
     w: spec.w,
     h: spec.h,
     rot: spec.rot,
@@ -129,44 +103,35 @@ function emit(state, spec, origin, bornMs) {
   });
 }
 
-export function stepConfetti(state, elapsed, origin, viewport) {
+export function stepConfetti(state, elapsed, _origin, viewport) {
   if (elapsed + 40 < state.lastElapsed) {
     state.particles.length = 0;
-    state.burstDone = false;
-    state.rainIndex = 0;
+    state.index = 0;
   }
   const dt = Math.min(0.034, Math.max(0, (elapsed - state.lastElapsed) / 1000));
   state.lastElapsed = elapsed;
 
-  if (origin && !state.burstDone && elapsed >= BURST_AT) {
-    for (const spec of state.show.burst) emit(state, spec, origin, BURST_AT);
-    state.burstDone = true;
-  }
-
-  if (origin) {
-    const rain = state.show.rain;
-    while (state.rainIndex < rain.length && rain[state.rainIndex].t <= elapsed) {
-      emit(state, rain[state.rainIndex], origin, rain[state.rainIndex].t);
-      state.rainIndex += 1;
-    }
+  const show = state.show;
+  while (state.index < show.length && show[state.index].t <= elapsed) {
+    emit(state, show[state.index], viewport, show[state.index].t);
+    state.index += 1;
   }
 
   const now = elapsed / 1000;
   for (let i = state.particles.length - 1; i >= 0; i -= 1) {
     const p = state.particles[i];
     p.age = now - p.born;
-    if (p.age >= p.life || elapsed >= 6900) {
+    if (p.age >= p.life || elapsed >= CLEAR_AT) {
       state.particles.splice(i, 1);
       continue;
     }
     p.vy += p.gravity * dt;
-    p.vx *= Math.exp(-0.7 * dt);
     p.x += p.vx * dt + Math.sin(p.age * p.swayFreq + p.swayPhase) * p.sway * dt;
     p.y += p.vy * dt;
     p.rot += p.vr * dt;
-    const fadeWindow = 0.5;
+    const fadeWindow = 0.45;
     p.alpha = p.age > p.life - fadeWindow ? Math.max(0, (p.life - p.age) / fadeWindow) : 1;
-    if (p.y > viewport.height + 48 || p.x < -80 || p.x > viewport.width + 80) {
+    if (p.y > viewport.height + 30 || p.x < -40 || p.x > viewport.width + 40) {
       state.particles.splice(i, 1);
     }
   }
@@ -181,15 +146,7 @@ export function drawConfetti(ctx, state, width, height, dpr) {
     ctx.rotate(p.rot);
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
-    if (p.shape === 'circle') {
-      ctx.beginPath();
-      ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 1.4);
-      ctx.fill();
-    }
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
     ctx.restore();
   }
   ctx.globalAlpha = 1;

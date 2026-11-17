@@ -63,33 +63,35 @@ function NpmMark() {
   );
 }
 
-function cursorPoint(elapsed) {
-  const count = document.querySelector('.count');
-  if (!count) return null;
-  const rect = count.getBoundingClientRect();
-  const drift = elapsed / LOOP_MS;
-  const distance = Math.min(window.innerWidth * 0.2, 300);
-  return {
-    x: rect.left + rect.width * 0.7 + drift * distance,
-    y: rect.top + rect.height * 0.62 + drift * 34,
-  };
-}
-
 export function Celebration() {
   const reduced = useReducedMotion();
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
+  const countRef = useRef(null);
+  const labelRef = useRef(null);
+  const [runId, setRunId] = useState(0);
+
+  function play() {
+    if (reduced) return;
+    setRunId((id) => id + 1);
+  }
 
   useEffect(() => {
     const cursor = cursorRef.current;
     const place = (elapsed) => {
-      const point = cursorPoint(reduced ? 0 : elapsed);
-      if (!point || !cursor) return;
-      cursor.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+      const count = countRef.current?.getBoundingClientRect();
+      const label = labelRef.current?.getBoundingClientRect();
+      if (!count || !cursor || count.width === 0) return;
+      const drift = runId === 0 || reduced ? 0 : Math.min(1, elapsed / LOOP_MS);
+      const startX = count.left + count.width * 0.58;
+      const startY = count.top + count.height * 0.58;
+      const endX = label ? label.right + 18 : startX + 120;
+      const endY = label ? label.top + label.height * 0.15 : startY + 70;
+      cursor.style.transform = `translate3d(${startX + (endX - startX) * drift}px, ${startY + (endY - startY) * drift}px, 0)`;
       cursor.style.opacity = '1';
     };
 
-    if (reduced) {
+    if (reduced || runId === 0) {
       place(0);
       const onResize = () => place(0);
       window.addEventListener('resize', onResize);
@@ -103,7 +105,7 @@ export function Celebration() {
     const started = performance.now();
 
     const tick = (now) => {
-      const elapsed = (now - started) % LOOP_MS;
+      const elapsed = now - started;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -113,10 +115,7 @@ export function Celebration() {
         canvas.width = pixelWidth;
         canvas.height = pixelHeight;
       }
-      const count = document.querySelector('.count');
-      const rect = count?.getBoundingClientRect();
-      const origin = rect && rect.width > 0 ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
-      stepConfetti(state, elapsed, origin, { width, height });
+      stepConfetti(state, elapsed, null, { width, height });
       drawConfetti(ctx, state, width, height, dpr);
       place(elapsed);
       frame = requestAnimationFrame(tick);
@@ -124,23 +123,23 @@ export function Celebration() {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [reduced]);
+  }, [reduced, runId]);
 
   return (
     <div className={reduced ? 'scene scene--still' : 'scene'}>
-      <canvas ref={canvasRef} className="confetti" aria-hidden="true" />
       <main className="stack">
         <div className="badge">
           <PackageIcon />
           <span>@hugeicons/react</span>
         </div>
-        <h1 className="count">886K</h1>
-        <p className="label">Weekly Downloads</p>
-        <p className="thanks">Thank you for the support 💚</p>
+        <button type="button" className="count" ref={countRef} onClick={play}>886K</button>
+        <p className="label" ref={labelRef}>Weekly Downloads</p>
+        <p className="thanks">Thank you for the support! 💚</p>
       </main>
       <div className="npm">
         <NpmMark />
       </div>
+      <canvas ref={canvasRef} className="confetti" aria-hidden="true" />
       <div ref={cursorRef} className="cursor" aria-hidden="true">
         <Pointer />
       </div>
